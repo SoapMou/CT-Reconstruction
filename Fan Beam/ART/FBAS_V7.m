@@ -10,19 +10,19 @@ det   = 'A';   %探测器排列方式(A=等角;L=等距)
 pix   = 512;   %图像尺寸(单边像素数量)
 sod   = 726;   %射线源-旋转中心距离(sod>0.5*pix/(sin(fan/2)*sin(45°)))
 fan   = 60;    %扇形束张角(角度制)
-anum  = 1200;  %旋转角度数量(射线源沿逆时针方向旋转)
+anum  = 600;  %旋转角度数量(射线源沿逆时针方向旋转)
 dnum  = 801;   %探测器数量(探测器沿逆时针方向编号)
-fidx  = 1;     %滤波器编号(1=Ramp;2=Hanning;3=Hamming;4=Cosine;5=Triang;6=BartHann)
-inum  = 6;     %迭代次数
+fidx  = 1;     %滤波器编号(1=Ramp;2=Hanning;3=Hamming;4=Cosine)
+inum  = 1;     %迭代次数
 Relax = 0.1;   %松弛因子(控制迭代的步长)
 TV    = 0;     %TV正则(1=使用;0=不使用)
 Mode  = 1;     %迭代重建模式(0=基于空图;1=基于FBP)
 Range = 1;     %0=每轮约束<0的值;1=每轮约束<0和>1的值;其他=无操作
+img   = phantom(pix);  %重建对象
 %----------------------------------File Name-----------------------------------%
 FN = strcat('FBAS_V7',det,'p',string(pix),'s',string(sod),'f',string(fan*10),'a',string(anum),...
             'd',string(dnum),'f',string(fidx),'i',string(inum),'r',string(Relax));
 %------------------------------------------------------------------------------%
-img   = phantom(pix);  %重建对象
 iseq  = img(:);  %重建对象(列向量)
 hpix  = 0.5*pix;
 FBP   = zeros(pix*pix,1);  %FBP数据
@@ -36,17 +36,13 @@ SIDi  = zeros(pix*2-1,dnum*anum);  %Siddon index(射线穿过像素的编号)
 SIDw  = zeros(pix*2-1,dnum*anum);  %Siddon weight(射线穿过像素的权重)
 SIDn  = zeros(dnum,anum);  %Siddon number(射线穿过像素的数量)
 sino  = zeros(dnum,anum);  %Sinogram
-%-------------------------------Weight and Filter------------------------------%
-wseq  = 1./cosd(iba);  %加权序列
-flen  = 16384;  %滤波器长度
-fseq  = linspace(-1,1,flen);
+%------------------------------------Filter------------------------------------%
+flen  = 4096;  %滤波器长度
 win   = ones(10,flen);  %窗口函数
 win(2,:) = hann(flen);
 win(3,:) = hamming(flen);
-win(4,:) = cos(pi*fseq/2);
-win(5,:) = triang(flen);
-win(6,:) = barthannwin(flen);
-filt  = transpose(abs(fseq).*win(fidx,:));
+win(4,:) = cos(pi*linspace(-1,1,flen)/2);
+filt  = transpose(abs(linspace(-1,1,flen)).*win(fidx,:));
 %----------------------------Calculate System Matrix---------------------------%
 for a = 1:anum
     sa = (a-1)*360/anum;  %source angle(角度制)
@@ -116,14 +112,13 @@ for a = 1:anum
             mask(index) = 1;
         end
     end
-    %--------Weighting/Filtering/Backprojection--------%
-    wPD   = PD;  %Siddon算法不加权的重建效果更好
-    fftp  = fftshift(fft(wPD,flen));  %fftshift将fft变为负高频-低频-高频形式
+    %--------Filtering/Backprojection--------%
+    fftp  = fftshift(fft(PD,flen));  %fftshift将fft变为负高频-低频-高频形式
     ifftp = real(ifft(ifftshift(fftp.*filt)));  %滤波+傅里叶反变换
-    fwPD  = ifftp(1:dnum);
+    fPD   = ifftp(1:dnum);
     for d = 1:dnum  %反投影
         index = SIDi(1:SIDn(d,a),(a-1)*dnum+d);  %射线穿过像素的编号
-        FBP(index) = FBP(index)+fwPD(d)*SIDw(1:SIDn(d,a),(a-1)*dnum+d);
+        FBP(index) = FBP(index)+fPD(d)*SIDw(1:SIDn(d,a),(a-1)*dnum+d);
     end
     sino(:,a) = PD;  %将当前角度的投影数据记录到Sinogram中
 end
