@@ -10,14 +10,14 @@ Gdet  = 'A';   %探测器排列方式(A=等角;L=等距)
 Gpix  = 512;   %图像尺寸(单边像素数量)
 Gsod  = 726;   %射线源-旋转中心距离(sod>0.5*pix/(sin(fan/2)*sin(45°)))
 Gfan  = 60;    %扇形束张角(角度制)
-Ganum = 1200;  %旋转角度数量(射线源沿逆时针方向旋转)
-Gdnum = 801;   %探测器数量(探测器沿逆时针方向编号)
-Gfidx = 1;     %滤波器编号(1=Ramp;2=Hanning;3=Hamming;4=Cosine;5=Triang;6=BartHann)
-%-----------------------------------File Name----------------------------------%
+Ganum = 1152;  %旋转角度数量(射线源沿逆时针方向旋转)
+Gdnum = 755;   %探测器数量(探测器沿逆时针方向编号)
+Gfidx = 1;     %滤波器编号(1=Ramp;2=Hanning;3=Hamming;4=Cosine)
+Gimg  = phantom(Gpix);  %重建对象
+%----------------------------------File Name-----------------------------------%
 FN = strcat('FBFS_V9',Gdet,'p',string(Gpix),'s',string(Gsod),'f',string(Gfan*10),...
             'a',string(Ganum),'d',string(Gdnum),'f',string(Gfidx));
 %------------------------------------------------------------------------------%
-Gimg  = phantom(Gpix);  %重建对象
 GFBP  = zeros(Gpix*Gpix,1);  %FBP数据
 Gmask = zeros(Gpix*Gpix,1);  %背景区域(背景区域>0,目标区域=0)
 if strcmp(Gdet,'A')  %射线的初始角度(等角排布)
@@ -25,17 +25,13 @@ if strcmp(Gdet,'A')  %射线的初始角度(等角排布)
 elseif strcmp(Gdet,'L')  %射线的初始角度(等距排布)
     Giba = transpose(atand(linspace(tand(-Gfan/2),tand(Gfan/2),Gdnum)));
 end
-%-------------------------------Weight and Filter------------------------------%
-Gwseq = 1./cosd(Giba);  %加权序列
-Gflen = 16384;  %滤波器长度
-fseq  = linspace(-1,1,Gflen);
+%------------------------------------Filter------------------------------------%
+Gflen = 4096;  %滤波器长度
 win   = ones(10,Gflen);  %窗口函数
 win(2,:) = hann(Gflen);
 win(3,:) = hamming(Gflen);
-win(4,:) = cos(pi*fseq/2);
-win(5,:) = triang(Gflen);
-win(6,:) = barthannwin(Gflen);
-Gfilt = transpose(abs(fseq).*win(Gfidx,:));
+win(4,:) = cos(pi*linspace(-1,1,Gflen)/2);
+Gfilt = transpose(abs(linspace(-1,1,Gflen)).*win(Gfidx,:));
 %-------------------------------FBP at each angle------------------------------%
 parfor a = 1:Ganum
     %--------全局变量->局部变量--------%
@@ -122,13 +118,12 @@ parfor a = 1:Ganum
             end
         end
     end
-    %--------Weighting/Filtering/Backprojection--------%
-    wPD   = PD;  %Siddon算法不加权的重建效果更好
-    fftp  = fftshift(fft(wPD,Gflen));  %fftshift将fft变为负高频-低频-高频形式
+    %--------Filtering/Backprojection--------%
+    fftp  = fftshift(fft(PD,Gflen));  %fftshift将fft变为负高频-低频-高频形式
     ifftp = real(ifft(ifftshift(fftp.*Gfilt)));  %滤波+傅里叶反变换
-    fwPD  = ifftp(1:dnum);
+    fPD   = ifftp(1:dnum);
     for d = 1:dnum  %反投影
-        FBP(SIDi(1:SIDn(d),d)) = FBP(SIDi(1:SIDn(d),d))+fwPD(d)*SIDw(1:SIDn(d),d);
+        FBP(SIDi(1:SIDn(d),d)) = FBP(SIDi(1:SIDn(d),d))+fPD(d)*SIDw(1:SIDn(d),d);
     end
     GFBP = GFBP+FBP;  %将当前角度的FBP数据累加到GFBP中
     Gmask = Gmask+mask;  %将当前角度的mask累加到Gmask中

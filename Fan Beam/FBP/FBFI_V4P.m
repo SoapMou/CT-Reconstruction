@@ -10,14 +10,14 @@ Gdet  = 'A';   %探测器排列方式(A=等角;L=等距)
 Gpix  = 512;   %图像尺寸(单边像素数量)
 Gsod  = 726;   %射线源-旋转中心距离(sod>0.5*pix/(sin(fan/2)*sin(45°)))
 Gfan  = 60;    %扇形束张角(角度制)
-Ganum = 1200;  %旋转角度数量(射线源沿逆时针方向旋转)
-Gdnum = 801;   %探测器数量(探测器沿逆时针方向编号)
-Gfidx = 1;     %滤波器编号(1=Ramp;2=Hanning;3=Hamming;4=Cosine;5=Triang;6=BartHann)
+Ganum = 1152;  %旋转角度数量(射线源沿逆时针方向旋转)
+Gdnum = 769;   %探测器数量(探测器沿逆时针方向编号)
+Gfidx = 1;     %滤波器编号(1=Ramp;2=Hanning;3=Hamming;4=Cosine)
+Gimg  = phantom(Gpix);  %重建对象
 %----------------------------------File Name-----------------------------------%
 FN = strcat('FBFI_V4',Gdet,'p',string(Gpix),'s',string(Gsod),'f',string(Gfan*10),...
             'a',string(Ganum),'d',string(Gdnum),'f',string(Gfidx));
 %------------------------------------------------------------------------------%
-Gimg  = phantom(Gpix);  %重建对象
 GFBP  = zeros(Gpix*Gpix,1);  %FBP数据
 Gmask = zeros(Gpix*Gpix,1);  %背景区域(背景区域>0,目标区域=0)
 if strcmp(Gdet,'A')  %射线的初始角度(等角排布)
@@ -25,24 +25,20 @@ if strcmp(Gdet,'A')  %射线的初始角度(等角排布)
 elseif strcmp(Gdet,'L')  %射线的初始角度(等距排布)
     Giba = transpose(atand(linspace(tand(-Gfan/2),tand(Gfan/2),Gdnum)));
 end
-%-------------------------------Weight and Filter------------------------------%
-Gwseq = 1./cosd(Giba);  %加权序列
-Gflen = 16384;  %滤波器长度
-fseq  = linspace(-1,1,Gflen);
+%------------------------------------Filter------------------------------------%
+Gflen = 4096;  %滤波器长度
 win   = ones(10,Gflen);  %窗口函数
 win(2,:) = hann(Gflen);
 win(3,:) = hamming(Gflen);
-win(4,:) = cos(pi*fseq/2);
-win(5,:) = triang(Gflen);
-win(6,:) = barthannwin(Gflen);
-Gfilt = transpose(abs(fseq).*win(Gfidx,:));
+win(4,:) = cos(pi*linspace(-1,1,Gflen)/2);
+Gfilt = transpose(abs(linspace(-1,1,Gflen)).*win(Gfidx,:));
 %--------------------------------Image meshgrid--------------------------------%
 Gms = (Gpix-1)/2;  %meshgrid shift(图像网格偏移量)
 [GIX,GIY] = meshgrid(-Gms:1:Gms,Gms:-1:-Gms);  %重建对象的XY坐标网格
 %---------------------------Initial fan-beam meshgrid--------------------------%
 Gfms = ceil(sqrt(2)*Gpix/2)+0.5;  %射线网格偏移量
 Gfw  = 2*Gfms+1;  %射线网格宽度(每条射线的采样点数量)
-GFX  = repmat(-Gfms:1:Gfms,Gdnum,1);  %初始状态射线的X坐标网格
+GFX  = (repmat(-Gfms:1:Gfms,Gdnum,1)-Gsod).*cosd(Giba)+Gsod;  %初始状态射线的X坐标网格
 GFY  = tand(Giba).*(GFX-Gsod);  %初始状态射线的Y坐标网格
 %-------------------------------FBP at each angle------------------------------%
 parfor a = 1:Ganum
@@ -62,11 +58,10 @@ parfor a = 1:Ganum
     proj = interp2(GIX,GIY,Gimg,X,Y,'linear');  %使用线性插值法计算投影数据
     proj(isnan(proj)) = 0;  %将nan赋值0
     PD = sum(proj,2);  %将proj每行数据累加得到每条射线的投影值
-    %--------Weighting/Filtering/Backprojection--------%
-    wPD   = PD.*Gwseq;  %插值法加权的重建效果更好
-    fftp  = fftshift(fft(wPD,Gflen));  %fftshift将fft变为负高频-低频-高频形式
+    %--------Filtering/Backprojection--------%
+    fftp  = fftshift(fft(PD,Gflen));  %fftshift将fft变为负高频-低频-高频形式
     ifftp = real(ifft(ifftshift(fftp.*Gfilt)));  %滤波+傅里叶反变换
-    fwPD  = ifftp(1:Gdnum);
+    fPD   = ifftp(1:Gdnum);
     for r = 1:Gdnum
         for c = 1:fw
             if abs(X(r,c)) <= ms && abs(Y(r,c)) <= ms
@@ -76,10 +71,10 @@ parfor a = 1:Ganum
                 dy = Y(r,c)+ms-floor(Y(r,c)+ms);  %插值点与下方Y坐标的差
                 rt = pix-ceil(Y(r,c)+ms);  %row top,插值点上方对应图像的行
                 rb = pix-floor(Y(r,c)+ms);  %row bottom,插值点下方对应图像的行
-                FBP((ct-1)*pix+rt) = FBP((ct-1)*pix+rt)+dx*dy*fwPD(r);  %右上
-                FBP((cb-1)*pix+rt) = FBP((cb-1)*pix+rt)+(1-dx)*dy*fwPD(r);  %左上
-                FBP((ct-1)*pix+rb) = FBP((ct-1)*pix+rb)+dx*(1-dy)*fwPD(r);  %右下
-                FBP((cb-1)*pix+rb) = FBP((cb-1)*pix+rb)+(1-dx)*(1-dy)*fwPD(r);  %左下
+                FBP((ct-1)*pix+rt) = FBP((ct-1)*pix+rt)+dx*dy*fPD(r);  %右上
+                FBP((cb-1)*pix+rt) = FBP((cb-1)*pix+rt)+(1-dx)*dy*fPD(r);  %左上
+                FBP((ct-1)*pix+rb) = FBP((ct-1)*pix+rb)+dx*(1-dy)*fPD(r);  %右下
+                FBP((cb-1)*pix+rb) = FBP((cb-1)*pix+rb)+(1-dx)*(1-dy)*fPD(r);  %左下
                 if PD(r) == 0  %投影值=0,记录背景区域
                     mask((ct-1)*pix+rt) = 1;  %右上点
                     mask((cb-1)*pix+rt) = 1;  %左上点
