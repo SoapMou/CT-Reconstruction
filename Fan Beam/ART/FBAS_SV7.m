@@ -1,4 +1,4 @@
-%Fan-Beam ART Siddon Slow V7 
+%Fan-Beam ART Siddon Slow V7
 %----------------------------------Description---------------------------------%
 %系统矩阵:Siddon(即时计算系统矩阵,占用内存小,速度慢)
 %重建算法:ART
@@ -10,14 +10,14 @@ Gdet  = 'A';   %探测器排列方式(A=等角;L=等距)
 Gpix  = 512;   %图像尺寸(单边像素数量)
 Gsod  = 726;   %射线源-旋转中心距离(sod>0.5*pix/(sin(fan/2)*sin(45°)))
 Gfan  = 60;    %扇形束张角(角度制)
-Ganum = 600;  %旋转角度数量(射线源沿逆时针方向旋转)
+Ganum = 1200;  %旋转角度数量(射线源沿逆时针方向旋转)
 Gdnum = 801;   %探测器数量(探测器沿逆时针方向编号)
 Gfidx = 1;     %滤波器编号(1=Ramp;2=Hanning;3=Hamming;4=Cosine)
-Ginum = 1;     %迭代次数
+Ginum = 6;     %迭代次数
 RF    = 0.1;   %松弛因子(控制迭代的步长)
 TV    = 0;     %TV正则(1=使用;0=不使用)
 Mode  = 1;     %迭代重建模式(0=基于空图;1=基于FBP)
-Gimg  = phantom(Gpix);  %重建对象
+Gimg  = MAYOp512;  %重建对象
 %-----------------------------------File Name----------------------------------%
 FN = strcat('FBAS_SV7',Gdet,'p',string(Gpix),'s',string(Gsod),'f',string(Gfan*10),...
             'a',string(Ganum),'d',string(Gdnum),'f',string(Gfidx),'i',string(Ginum),...
@@ -61,14 +61,14 @@ parfor a = 1:Ganum
     for d = 1:dnum
         k = tand(ba(d));  %射线的斜率
         if abs(k) == inf  %--------射线垂直于X轴--------%
-            if abs(x0) <= hp  %判断射线是否穿过图像
+            if abs(x0) < hp  %判断射线是否穿过图像
                 col = ceil(x0)+hp;  %确定射线对应的列
                 SIDn(d) = pix;  %记录像素的数量
                 SIDi(1:pix,d) = (col-1)*pix+1:1:col*pix;  %记录像素的编号
                 PD(d) = sum(img(:,col));  %记录射线的投影值
             end 
         elseif k == 0  %--------射线垂直于Y轴--------%
-            if abs(y0) <= hp  %判断射线是否穿过图像
+            if abs(y0) < hp  %判断射线是否穿过图像
                 row = -floor(y0)+hp;  %确定射线对应的行
                 SIDn(d) = pix;  %记录像素的数量
                 SIDi(1:pix,d) = row:pix:(pix-1)*pix+row;  %记录像素的编号
@@ -77,7 +77,7 @@ parfor a = 1:Ganum
         else  %--------射线处于其他角度--------%
             xT = (hp-y0)/k+x0;  %x top
             xB = (-hp-y0)/k+x0;  %x bottom
-            if (xT<-hp && xB<-hp)+(xT>hp && xB>hp) ~= 0  %射线是否从图像左/右侧经过
+            if (xT<=-hp && xB<=-hp)+(xT>=hp && xB>=hp) ~= 0  %射线是否从图像左/右侧经过
                 continue;
             end
             if k < 0  %射线与图像左/右交点X坐标
@@ -101,7 +101,7 @@ parfor a = 1:Ganum
     fftPD = real(ifft(fft(PD,Gflen).*Gfilt));  %滤波
     fPD   = fftPD(1:dnum);
     for d = 1:dnum
-        if SIDn(d,a) ~= 0  %判断射线是否穿过图像
+        if SIDn(d) ~= 0  %判断射线是否穿过图像
             for n = 1:SIDn(d)  %反投影
                 FBP(SIDi(n,d)) = FBP(SIDi(n,d))+fPD(d)*SIDw(n,d);
             end
@@ -137,15 +137,16 @@ for i = 1:Ginum
         for d = 1:Gdnum  %每分析一条射线更新一次图像
             k = tand(ba(d));  %射线的斜率
             PDe = 0;  %投影值/投影值差值
+            wt2 = 0;  %权重平方和
             if abs(k) == inf  %--------射线垂直于x轴--------%
-                if abs(x0) <= hp  %判断射线是否穿过图像
+                if abs(x0) < hp  %判断射线是否穿过图像
                     col = ceil(x0)+hp;  %确定射线对应的列
                     I(1:pix) = (col-1)*pix+1:1:col*pix;  %记录像素的编号
                     PDe = RF*(sino(d,a)-sum(ARTf(I(1:pix))))/pix;  %射线投影值差值
                     ARTf(I(1:pix)) = ARTf(I(1:pix))+PDe;  %更新图像
                 end
             elseif k == 0  %--------射线垂直于y轴--------%
-                if abs(y0) <= hp  %判断射线是否穿过图像
+                if abs(y0) < hp  %判断射线是否穿过图像
                     row = -floor(y0)+hp;  %确定射线对应的行
                     I(1:pix) = row:pix:(pix-1)*pix+row;  %记录像素的编号
                     PDe = RF*(sino(d,a)-sum(ARTf(I(1:pix))))/pix;  %射线投影值差值
@@ -154,7 +155,7 @@ for i = 1:Ginum
             else  %--------射线处于其他角度--------%
                 xT = (hp-y0)/k+x0;  %x top
                 xB = (-hp-y0)/k+x0;  %x bottom
-                if (xT<-hp && xB<-hp)+(xT>hp && xB>hp) ~= 0  %射线是否从图像左/右侧经过
+                if (xT<=-hp && xB<=-hp)+(xT>=hp && xB>=hp) ~= 0  %射线是否从图像左/右侧经过
                     continue;
                 end
                 if k < 0  %射线与图像左/右交点X坐标
@@ -171,8 +172,9 @@ for i = 1:Ginum
                     I(n) = (col-1)*pix+row;  %记录像素的编号
                     W(n) = (xpos(n+1)-xpos(n))/COS(d);  %记录像素的权重
                     PDe = PDe+ARTf((col-1)*pix+row)*W(n);  %记录射线的投影值
+                    wt2 = wt2+W(n)^2;
                 end
-                PDe = RF*(sino(d,a)-PDe)/sum(W(1:N).^2);  %射线投影值差值
+                PDe = RF*(sino(d,a)-PDe)/wt2;  %射线投影值差值
                 for n = 1:N  %更新图像
                     ARTf(I(n)) = ARTf(I(n))+W(n)*PDe;
                 end

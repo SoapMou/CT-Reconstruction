@@ -1,4 +1,4 @@
-%Fan-Beam ART Siddon Fast V7 
+%Fan-Beam ART Siddon Fast V7
 %----------------------------------Description---------------------------------%
 %系统矩阵:Siddon(预先计算系统矩阵,占用内存大,速度快)
 %重建算法:ART
@@ -13,7 +13,7 @@ fan   = 60;    %扇形束张角(角度制)
 anum  = 1200;  %旋转角度数量(射线源沿逆时针方向旋转)
 dnum  = 801;   %探测器数量(探测器沿逆时针方向编号)
 fidx  = 1;     %滤波器编号(1=Ramp;2=Hanning;3=Hamming;4=Cosine)
-inum  = 6;     %迭代次数
+inum  = 8;     %迭代次数
 RF    = 0.1;   %松弛因子(控制迭代的步长)
 TV    = 0;     %TV正则(1=使用;0=不使用)
 Mode  = 1;     %迭代重建模式(0=基于空图;1=基于FBP)
@@ -53,14 +53,14 @@ for a = 1:anum
     for d = 1:dnum
         k = tand(ba(d));  %射线的斜率
         if abs(k) == inf  %--------射线垂直于X轴--------%
-            if abs(x0) <= hp  %判断射线是否穿过图像
+            if abs(x0) < hp  %判断射线是否穿过图像
                 col = ceil(x0)+hp;  %确定射线对应的列
                 SIDn(d,a) = pix;  %记录像素的数量
                 SIDi(1:pix,(a-1)*dnum+d) = (col-1)*pix+1:1:col*pix;  %记录像素的编号
                 sino(d,a) = sum(img(:,col));  %记录射线的投影值
             end
         elseif k == 0  %--------射线垂直于Y轴--------%
-            if abs(y0) <= hp  %判断射线是否穿过图像
+            if abs(y0) < hp  %判断射线是否穿过图像
                 row = -floor(y0)+hp;  %确定射线对应的行
                 SIDn(d,a) = pix;  %记录像素的数量
                 SIDi(1:pix,(a-1)*dnum+d) = row:pix:(pix-1)*pix+row;  %记录像素的编号
@@ -69,7 +69,7 @@ for a = 1:anum
         else  %--------射线处于其他角度--------%
             xT = (hp-y0)/k+x0;  %x top
             xB = (-hp-y0)/k+x0;  %x bottom
-            if (xT<-hp && xB<-hp)+(xT>hp && xB>hp) ~= 0  %射线是否从图像左/右侧经过
+            if (xT<=-hp && xB<=-hp)+(xT>=hp && xB>=hp) ~= 0  %射线是否从图像左/右侧经过
                 continue;
             end
             if k < 0  %射线与图像左/右交点X坐标
@@ -117,7 +117,9 @@ for i = 1:inum
             if SIDn(d,a) ~= 0  %判断射线是否穿过图像
                 cd = (a-1)*dnum+d;
                 if sino(d,a) == 0  %原始投影值=0,射线穿过像素赋值0
-                    ARTf(SIDi(1:SIDn(d,a),cd)) = 0;
+                    for n = 1:SIDn(d,a)
+                        ARTf(SIDi(n,cd)) = 0;
+                    end
                 else
                     PDe = 0;  %投影值/投影值差值
                     wt2 = 0;  %权重平方和
