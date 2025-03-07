@@ -13,7 +13,7 @@ Gfan  = 60;    %扇形束张角(角度制)
 Ganum = 1200;  %旋转角度数量(射线源沿逆时针方向旋转)
 Gdnum = 801;   %探测器数量(探测器沿逆时针方向编号)
 Gfidx = 1;     %滤波器编号(1=Ramp;2=Hanning;3=Hamming;4=Cosine)
-Gimg  = phantom(Gpix);  %重建对象
+Gimg  = MAYOp512;  %重建对象
 %----------------------------------File Name-----------------------------------%
 FN = strcat('FBFI_V4',Gdet,'p',string(Gpix),'s',string(Gsod),'f',string(Gfan*10),...
             'a',string(Ganum),'d',string(Gdnum),'f',string(Gfidx));
@@ -36,7 +36,7 @@ Gfilt = transpose(ifftshift(abs(linspace(-1,1,Gflen)).*win(Gfidx,:)));  %预先i
 Gms = (Gpix-1)/2;  %meshgrid shift(图像网格偏移量)
 [GIX,GIY] = meshgrid(-Gms:1:Gms,Gms:-1:-Gms);  %重建对象的XY坐标网格
 %---------------------------Initial fan-beam meshgrid--------------------------%
-Gfms = ceil(sqrt(2)*Gpix/2)+0.5;  %射线网格偏移量
+Gfms = round(sqrt(2)*Gpix/2)+0.5;  %射线网格偏移量
 Gfw  = 2*Gfms+1;  %射线网格宽度(每条射线的采样点数量)
 GFX  = (repmat(-Gfms:1:Gfms,Gdnum,1)-Gsod).*cosd(Giba)+Gsod;  %初始状态射线的X坐标网格
 GFY  = tand(Giba).*(GFX-Gsod);  %初始状态射线的Y坐标网格

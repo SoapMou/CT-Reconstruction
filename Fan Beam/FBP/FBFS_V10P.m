@@ -10,10 +10,10 @@ Gdet  = 'A';   %探测器排列方式(A=等角;L=等距)
 Gpix  = 512;   %图像尺寸(单边像素数量)
 Gsod  = 726;   %射线源-旋转中心距离(sod>0.5*pix/(sin(fan/2)*sin(45°)))
 Gfan  = 60;    %扇形束张角(角度制)
-Ganum = 2400;  %旋转角度数量(射线源沿逆时针方向旋转)
-Gdnum = 801;   %探测器数量(探测器沿逆时针方向编号)
+Ganum = 4800;  %旋转角度数量(射线源沿逆时针方向旋转)
+Gdnum = 800;   %探测器数量(探测器沿逆时针方向编号)
 Gfidx = 1;     %滤波器编号(1=Ramp;2=Hanning;3=Hamming;4=Cosine)
-Gimg  = phantom(Gpix);  %重建对象
+Gimg  = MAYOp512;  %重建对象
 %----------------------------------File Name-----------------------------------%
 FN = strcat('FBFS_V10',Gdet,'p',string(Gpix),'s',string(Gsod),'f',string(Gfan*10),...
             'a',string(Ganum),'d',string(Gdnum),'f',string(Gfidx));
@@ -55,14 +55,14 @@ parfor a = 1:Ganum
     for d = 1:dnum
         k = tand(ba(d));  %射线的斜率
         if abs(k) == inf  %--------射线垂直于X轴--------%
-            if abs(x0) <= hp  %判断射线是否穿过图像
+            if abs(x0) < hp  %判断射线是否穿过图像
                 col = ceil(x0)+hp;  %确定射线对应的列
                 SIDn(d) = pix;  %记录像素的数量
                 SIDi(1:pix,d) = (col-1)*pix+1:1:col*pix;  %记录像素的编号
                 PD(d) = sum(img(:,col));  %记录射线的投影值
             end 
         elseif k == 0  %--------射线垂直于Y轴--------%
-            if abs(y0) <= hp  %判断射线是否穿过图像
+            if abs(y0) < hp  %判断射线是否穿过图像
                 row = -floor(y0)+hp;  %确定射线对应的行
                 SIDn(d) = pix;  %记录像素的数量
                 SIDi(1:pix,d) = row:pix:(pix-1)*pix+row;  %记录像素的编号
@@ -71,7 +71,7 @@ parfor a = 1:Ganum
         else  %--------射线处于其他角度--------%
             xT = (hp-y0)/k+x0;  %x top
             xB = (-hp-y0)/k+x0;  %x bottom
-            if (xT<-hp && xB<-hp)+(xT>hp && xB>hp) ~= 0  %射线是否从图像左/右侧经过
+            if (xT<=-hp && xB<=-hp)+(xT>=hp && xB>=hp) ~= 0  %射线是否从图像左/右侧经过
                 continue;
             end
             if k < 0  %射线与图像左/右交点X坐标
